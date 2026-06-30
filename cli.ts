@@ -1,6 +1,7 @@
 import inquirer from "inquirer";
 import yargs from "yargs";
 import { PortalUFRGS } from "./portal";
+import { posthog } from "./posthog";
 import { DEFAULT_OUTPUT_TARGET, DEFAULT_OUTPUT_TYPE } from "./types";
 
 const studentCurriculumHandler = async (
@@ -16,10 +17,13 @@ const studentCurriculumHandler = async (
 
   const { studentId, password } = credentials;
   try {
-    await portal.login(studentId, password);
-    await portal.studentCurriculum(outputType, outputTarget);
+    await portal.login(studentId, password, posthog);
+    await portal.studentCurriculum(outputType, outputTarget, studentId, posthog);
   } catch (e) {
+    posthog.captureException(e, studentId);
     console.error(e.message);
+  } finally {
+    await posthog.shutdown();
   }
 };
 
@@ -32,6 +36,11 @@ export const cli = () => {
       "busca o histórico escolar do aluno",
       (yargs) => {},
       function (argv) {
+        posthog.capture({
+          distinctId: "anonymous",
+          event: "command_run",
+          properties: { command: "historico" },
+        });
         studentCurriculumHandler();
       }
     )

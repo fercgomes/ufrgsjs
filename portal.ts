@@ -2,6 +2,7 @@ import Axios, { AxiosInstance } from "axios";
 import * as cheerio from "cheerio";
 import FormData from "form-data";
 import Fuse from "fuse.js";
+import { PostHog } from "posthog-node";
 import puppeteer from "puppeteer";
 import { PORTAL_UFRGS_BASE_URL, PORTAL_UFRGS_LOGIN_URL } from "./constants";
 import { OutputTarget, OutputType } from "./types";
@@ -16,7 +17,7 @@ export class PortalUFRGS {
     });
   }
 
-  public async login(username: string, password: string) {
+  public async login(username: string, password: string, posthog?: PostHog) {
     console.log("Logando no Portal do Aluno");
 
     const browser = await puppeteer.launch();
@@ -43,7 +44,16 @@ export class PortalUFRGS {
 
     if (token) {
       this.token = token;
+      posthog?.identify({ distinctId: username });
+      posthog?.capture({
+        distinctId: username,
+        event: "login_succeeded",
+      });
     } else {
+      posthog?.capture({
+        distinctId: username,
+        event: "login_failed",
+      });
       throw new Error("Credenciais incorretas");
     }
   }
@@ -54,7 +64,9 @@ export class PortalUFRGS {
 
   public async studentCurriculum(
     outputType: OutputType,
-    outputTarget: OutputTarget
+    outputTarget: OutputTarget,
+    distinctId?: string,
+    posthog?: PostHog
   ) {
     const URL = "/especial/index.php?cods=1,1,2,4";
 
@@ -98,6 +110,16 @@ export class PortalUFRGS {
             situacao,
             creditos,
           });
+      });
+
+      posthog?.capture({
+        distinctId: distinctId ?? "anonymous",
+        event: "curriculum_viewed",
+        properties: {
+          output_type: outputType,
+          output_target: outputTarget,
+          course_count: rows.length,
+        },
       });
 
       // Check output format
