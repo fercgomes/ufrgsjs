@@ -2,6 +2,7 @@ import inquirer from "inquirer";
 import yargs from "yargs";
 import { PortalUFRGS } from "./portal";
 import { DEFAULT_OUTPUT_TARGET, DEFAULT_OUTPUT_TYPE } from "./types";
+import { posthog } from "./posthog";
 
 const studentCurriculumHandler = async (
   outputType = DEFAULT_OUTPUT_TYPE,
@@ -15,11 +16,16 @@ const studentCurriculumHandler = async (
   const portal = new PortalUFRGS();
 
   const { studentId, password } = credentials;
+  posthog.capture({ distinctId: studentId, event: "command_executed", properties: { command: "historico" } });
   try {
     await portal.login(studentId, password);
     await portal.studentCurriculum(outputType, outputTarget);
   } catch (e) {
+    posthog.captureException(e, studentId);
+    posthog.capture({ distinctId: studentId, event: "error_occurred", properties: { command: "historico", error_message: e.message } });
     console.error(e.message);
+  } finally {
+    await posthog.shutdown();
   }
 };
 

@@ -5,9 +5,11 @@ import Fuse from "fuse.js";
 import puppeteer from "puppeteer";
 import { PORTAL_UFRGS_BASE_URL, PORTAL_UFRGS_LOGIN_URL } from "./constants";
 import { OutputTarget, OutputType } from "./types";
+import { posthog } from "./posthog";
 
 export class PortalUFRGS {
   private token?: string;
+  private username?: string;
   private axios: AxiosInstance;
 
   constructor() {
@@ -43,7 +45,19 @@ export class PortalUFRGS {
 
     if (token) {
       this.token = token;
+      this.username = username;
+      posthog.identify({ distinctId: username });
+      posthog.capture({
+        distinctId: username,
+        event: "login_succeeded",
+        properties: { source: "portal_ufrgs" },
+      });
     } else {
+      posthog.capture({
+        distinctId: username,
+        event: "login_failed",
+        properties: { source: "portal_ufrgs" },
+      });
       throw new Error("Credenciais incorretas");
     }
   }
@@ -98,6 +112,12 @@ export class PortalUFRGS {
             situacao,
             creditos,
           });
+      });
+
+      posthog.capture({
+        distinctId: this.username,
+        event: "curriculum_fetched",
+        properties: { record_count: rows.length, output_type: outputType, output_target: outputTarget },
       });
 
       // Check output format
